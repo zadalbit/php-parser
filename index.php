@@ -450,15 +450,7 @@ class Code
 					}
 
 					if (!$opener_is_comment && !$opener_is_output_text) {
-						if ($operation['operation_aim'] == 'output_text') {
-							$operation = $this->lookingForOutputTextCloser($operation, $pointer);
-							
-							$this->output_text[] = $operation;
-
-							$pointer = $operation['closer_pos'] + strlen($operation['closer']);
-						} else {
-							$this->operations[$operation['opener_pos']] = $operation;
-						}
+						$this->operations[$operation['opener_pos']] = $operation;
 					}
 				} else {
 					$pointer = -1;
