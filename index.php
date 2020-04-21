@@ -1,7 +1,8 @@
 <?php
 
-$text = '
-<?php
+//$file = file_get_contents('../vendor/symfony/symfony/src/Symfony/Component/HttpFoundation/FileBag.php');
+
+$text = '<?php
 
 /*
  * This file is part of the Symfony package.
@@ -124,7 +125,7 @@ class FileBag extends ParameterBag
         $keys = array_keys($data);
         sort($keys);
 
-        if (self::$fileKeys != $keys || !isset($data[\'name\']) || !is_array($data[\'name\'])) {
+        if (self::$fileKeys != $keys || !isset($data[\'ntext\\\'ame\']) || !is_array($data[\'name\'])) {
             return $data;
         }
 
@@ -139,7 +140,7 @@ class FileBag extends ParameterBag
                 \'name\' => $name,
                 \'type\' => $data[\'type\'][$key],
                 \'tmp_name\' => $data[\'tmp_name\'][$key],
-                \'size\' => $data[\'size\'][$key],
+                \'size\' => $data[\'s}ize\'][$key],
             ));
         }
 
@@ -147,6 +148,8 @@ class FileBag extends ParameterBag
     }
 }
 ';
+//$text = $file;
+//$text = htmlspecialchars($file);
 
 class Variable
 {
@@ -342,6 +345,16 @@ class Command
 			'closer' => ';'
 		),
 		array(
+			'operation_aim' => 'output_text',
+			'opener' => '\'',
+			'closer' => '\''
+		),
+		array(
+			'operation_aim' => 'output_text',
+			'opener' => '"',
+			'closer' => '"'
+		),
+		array(
 			'operation_aim' => 'comment',
 			'opener' => '/*',
 			'closer' => '*/'
@@ -448,6 +461,7 @@ class Code
 	public $pointer = 0;
 	public $operations = array();
 	public $comments = array();
+	public $output_text = array();
 	public $commands = array();
 	public $code = '';
 	public $operation = array();
@@ -457,6 +471,24 @@ class Code
     	$this->code = trim($code);
 
         $this->parseCommands();
+    }
+
+    public function lookingForOutputTextCloser($operation, $pointer) {
+    	$not_closer_pos = strpos($this->code, '\\'.$operation['closer'], $pointer);
+		$closer_pos = strpos($this->code, $operation['closer'], $pointer);
+
+		if ($not_closer_pos == 0 || $not_closer_pos > 0) {
+			if (($not_closer_pos + 1) == $closer_pos) {
+				$pointer = $closer_pos + strlen($operation['closer']);
+				$operation = $this->lookingForOutputTextCloser($operation, $pointer);
+			} else {
+				$operation['closer_pos'] = $closer_pos;
+			}
+		} else {
+			$operation['closer_pos'] = $closer_pos;
+		}
+
+		return $operation;
     }
 
     public function parseCommands() {
@@ -517,7 +549,15 @@ class Code
 					}
 
 					if (!$opener_is_comment) {
-						$this->operations[$operation['opener_pos']] = $operation;
+						if ($operation['operation_aim'] == 'output_text') {
+							$operation = $this->lookingForOutputTextCloser($operation, $pointer);
+							
+							$this->output_text[] = $operation;
+
+							$pointer = $operation['closer_pos'] + strlen($operation['closer']);
+						} else {
+							$this->operations[$operation['opener_pos']] = $operation;
+						}
 					}
 				} else {
 					$pointer = -1;
@@ -548,6 +588,7 @@ class Code
 						$operation['sub_code_opener_pos'] = strpos($this->code, $operation['sub_code_opener'], $this->pointer);
 
 						$operation = $this->checkIfCloserIsComment($operation);
+						$operation = $this->checkIfCloserIsOutputText($operation);
 
 						$this->operation = $operation;
 
@@ -577,6 +618,7 @@ class Code
 										$operation['closer_pos'] = strpos($this->code, $operation['closer'], $i);
 
 										$operation = $this->checkIfCloserIsComment($operation);
+										$operation = $this->checkIfCloserIsOutputText($operation);
 
 										$this->commands[] = substr($this->code, $operation['opener_pos'], $operation['closer_pos'] - $operation['opener_pos'] + strlen($operation['closer']));
 										$this->pointer = $operation['closer_pos'] + strlen($operation['closer']);
@@ -598,13 +640,16 @@ class Code
 							}
 						} else {
 							$operation = $this->checkIfCloserIsComment($operation);
+							$operation = $this->checkIfCloserIsOutputText($operation);
 
 							$this->commands[] = substr($this->code, $this->operation['opener_pos'], $operation['closer_pos'] - $this->operation['opener_pos'] + strlen($operation['closer']));
 							$this->pointer = $operation['closer_pos'] + strlen($operation['closer']);
 						}
 					} else {
 						$operation['closer_pos'] = strpos($this->code, $operation['closer'], $this->pointer);
+
 						$operation = $this->checkIfCloserIsComment($operation);
+						$operation = $this->checkIfCloserIsOutputText($operation);
 
 						$command['starts_from'] = $operation['opener_pos'];
 						$command['ends_on'] = $operation['closer_pos'] + strlen($operation['closer']);
@@ -621,6 +666,25 @@ class Code
 					$prev_operations[] = $operation;
 				}
 			}
+		}
+	}
+
+	public function checkIfCloserIsOutputText($operation) {
+		$closer_is_output_text = false;
+
+		foreach ($this->output_text as $key => $output_text) {
+			if ($output_text['opener_pos'] < $operation['closer_pos'] && $output_text['closer_pos'] > $operation['closer_pos']) {
+				$closer_is_output_text = true;
+				$pointer = $output_text['closer_pos'] + strlen($output_text['closer']);
+			}
+		}
+
+		if ($closer_is_output_text) {
+			$operation['closer_pos'] = strpos($this->code, $operation['closer'], $pointer);
+
+			return $this->checkIfCloserIsOutputText($operation);
+		} else {
+			return $operation;
 		}
 	}
 
