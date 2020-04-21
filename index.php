@@ -1,154 +1,8 @@
 <?php
 
-//$file = file_get_contents('../vendor/symfony/symfony/src/Symfony/Component/HttpFoundation/FileBag.php');
+$file = file_get_contents('../vendor/symfony/symfony/src/Symfony/Component/HttpFoundation/FileBag.php');
 
-$text = '<?php
-
-/*
- * This file is part of the Symfony package.
- *
- * (c) Fabien Potencier <fabien@symfony.com>
- *
- * For the full copyright and license information, please view the LICENSE
- * file that was distributed with this source code.
- */
-
-namespace Symfony\Component\HttpFoundation;
-
-use Symfony\Component\HttpFoundation\File\UploadedFile;
-
-/**
- * FileBag is a container for uploaded files.
- *
- * @author Fabien Potencier <fabien@symfony.com>
- * @author Bulat Shakirzyanov <mallluhuct@gmail.com>
- */
-class FileBag extends ParameterBag
-{
-    private static $fileKeys = array(\'error\', \'name\', \'size\', \'tmp_name\', \'type\');
-
-    /**
-     * Constructor.
-     *
-     * @param array $parameters An array of HTTP files
-     */
-    public function __construct(array $parameters = array())
-    {
-        $this->replace($parameters);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function replace(array $files = array())
-    {
-        $this->parameters = array();
-        $this->add($files);
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function set($key, $value)
-    {
-        if (!is_array($value) && !$value instanceof UploadedFile) {
-            throw new \InvalidArgumentException(\'An uploaded file must be an array or an instance of UploadedFile.\');
-        }
-
-        parent::set($key, $this->convertFileInformation($value));
-    }
-
-    /**
-     * {@inheritdoc}
-     */
-    public function add(array $files = array())
-    {
-        foreach ($files as $key => $file) {
-            $this->set($key, $file);
-        }
-    }
-
-    /**
-     * Converts uploaded files to UploadedFile instances.
-     *
-     * @param array|UploadedFile $file A (multi-dimensional) array of uploaded file information
-     *
-     * @return array A (multi-dimensional) array of UploadedFile instances
-     */
-    protected function convertFileInformation($file)
-    {
-        if ($file instanceof UploadedFile) {
-            return $file;
-        }
-
-        $file = $this->fixPhpFilesArray($file);
-        if (is_array($file)) {
-            $keys = array_keys($file);
-            sort($keys);
-
-            if ($keys == self::$fileKeys) {
-                if (UPLOAD_ERR_NO_FILE == $file[\'error\']) {
-                    $file = null;
-                } else {
-                    $file = new UploadedFile($file[\'tmp_name\'], $file[\'name\'], $file[\'type\'], $file[\'size\'], $file[\'error\']);
-                }
-            } else {
-                $file = array_map(array($this, \'convertFileInformation\'), $file);
-            }
-        }
-
-        return $file;
-    }
-
-    /**
-     * Fixes a malformed PHP $_FILES array.
-     *
-     * PHP has a bug that the format of the $_FILES array differs, depending on
-     * whether the uploaded file fields had normal field names or array-like
-     * field names ("normal" vs. "parent[child]").
-     *
-     * This method fixes the array to look like the "normal" $_FILES array.
-     *
-     * It\'s safe to pass an already converted array, in which case this method
-     * just returns the original array unmodified.
-     *
-     * @param array $data
-     *
-     * @return array
-     */
-    protected function fixPhpFilesArray($data)
-    {
-        if (!is_array($data)) {
-            return $data;
-        }
-
-        $keys = array_keys($data);
-        sort($keys);
-
-        if (self::$fileKeys != $keys || !isset($data[\'ntext\\\'ame\']) || !is_array($data[\'name\'])) {
-            return $data;
-        }
-
-        $files = $data;
-        foreach (self::$fileKeys as $k) {
-            unset($files[$k]);
-        }
-
-        foreach ($data[\'name\'] as $key => $name) {
-            $files[$key] = $this->fixPhpFilesArray(array(
-                \'error\' => $data[\'error\'][$key],
-                \'name\' => $name,
-                \'type\' => $data[\'type\'][$key],
-                \'tmp_name\' => $data[\'tmp_name\'][$key],
-                \'size\' => $data[\'s}ize\'][$key],
-            ));
-        }
-
-        return $files;
-    }
-}
-';
-//$text = $file;
+$text = $file;
 //$text = htmlspecialchars($file);
 
 class Variable
@@ -549,6 +403,53 @@ class Code
 					}
 
 					if (!$opener_is_comment) {
+						if ($operation['operation_aim'] == 'output_text') {
+							$operation = $this->lookingForOutputTextCloser($operation, $pointer);
+							
+							$this->output_text[] = $operation;
+
+							$pointer = $operation['closer_pos'] + strlen($operation['closer']);
+						}
+					}
+				} else {
+					$pointer = -1;
+				}
+			}
+		}
+
+		foreach (Command::$syntaxes as $key => $operation) {
+			$pointer = 0;
+
+			while ($pointer >= 0) {
+				if ($operation['opener'] == '_normalcase') {
+					$operation['opener_pos'] = strpos($this->code, $operation['opener'], $pointer);
+				} else if ($operation['opener'] == '_uppercase') {
+					$operation['opener_pos'] = strpos($this->code, $operation['opener'], $pointer);
+				} else {
+					$operation['opener_pos'] = strpos($this->code, $operation['opener'], $pointer);
+				}
+
+				if ($operation['opener_pos'] === 0 || $operation['opener_pos'] > 0) {
+					$pointer = $operation['opener_pos'] + strlen($operation['opener']);
+					$opener_is_comment = false;
+
+					foreach ($this->comments as $key => $comment) {
+						if ($comment['opener_pos'] < $operation['opener_pos'] && $comment['closer_pos'] > $operation['opener_pos']) {
+							$opener_is_comment = true;
+							$pointer = $comment['closer_pos'] + strlen($comment['closer']);
+						}
+					}
+
+					$opener_is_output_text = false;
+
+					foreach ($this->output_text as $key => $output_text) {
+						if ($output_text['opener_pos'] < $operation['opener_pos'] && $output_text['closer_pos'] > $operation['opener_pos']) {
+							$opener_is_output_text = true;
+							$pointer = $output_text['closer_pos'] + strlen($output_text['closer']);
+						}
+					}
+
+					if (!$opener_is_comment && !$opener_is_output_text) {
 						if ($operation['operation_aim'] == 'output_text') {
 							$operation = $this->lookingForOutputTextCloser($operation, $pointer);
 							
